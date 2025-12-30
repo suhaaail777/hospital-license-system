@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Edappal Hospital | Dashboard</title>
+
+    <style>
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: "Segoe UI", Arial, sans-serif;
+            background: #f4f7fb;
+            color: #333;
+        }
+
+        /* ================= HEADER ================= */
+        .header {
+            background: linear-gradient(90deg, #1a5fd0, #2c7be5);
+            color: white;
+            padding: 22px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .hospital-title {
+            font-size: 26px;
+            font-weight: bold;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .logout {
+            color: white;
+            text-decoration: none;
+            font-weight: bold;
+            border: 1px solid rgba(255,255,255,0.6);
+            padding: 8px 14px;
+            border-radius: 6px;
+        }
+
+        .logout:hover {
+            background: rgba(255,255,255,0.15);
+        }
+
+        /* ================= MAIN ================= */
+        .container {
+            padding: 30px 40px;
+        }
+
+        .welcome {
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+
+        .badge {
+            background: #28a745;
+            color: white;
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            margin-left: 8px;
+        }
+
+        /* ================= FILTER ================= */
+        .filter-bar {
+            margin: 20px 0;
+        }
+
+        .filter-bar select {
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: 1px solid #ccc;
+            font-size: 14px;
+        }
+
+        /* ================= DEPARTMENTS ================= */
+        .section-title {
+            margin-top: 20px;
+            font-size: 18px;
+            margin-bottom: 15px;
+        }
+
+        .dept-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            max-width: 700px;
+        }
+
+        .dept-card {
+            background: white;
+            border-radius: 10px;
+            padding: 18px;
+            text-align: center;
+            cursor: pointer;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.08);
+            transition: 0.2s;
+            font-weight: bold;
+            color: #1a5fd0;
+        }
+
+        .dept-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 24px rgba(0,0,0,0.12);
+        }
+
+        /* ================= TABLE ================= */
+        .table-box {
+            background: white;
+            margin-top: 35px;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 8px 22px rgba(0,0,0,0.08);
+            display: none;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th {
+            background: #2c7be5;
+            color: white;
+            padding: 12px;
+        }
+
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+        }
+
+        tr.expired { color: red; font-weight: bold; }
+        tr.warning { color: orange; }
+        tr.safe { color: green; }
+
+        /* ================= BUTTON ================= */
+        .action-bar {
+            margin-top: 30px;
+        }
+
+        .btn {
+            background: #2c7be5;
+            color: white;
+            padding: 12px 18px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: bold;
+        }
+
+        .btn:hover {
+            background: #1a5fd0;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="header">
+    <div>
+        <div class="hospital-title">EDAPPAL HOSPITAL</div>
+        <div class="subtitle">License Monitoring System</div>
+    </div>
+    <a class="logout" href="{{ url_for('logout') }}">Logout</a>
+</div>
+
+<div class="container">
+
+    <div class="welcome">
+        Welcome, {{ user.username }}
+        <span class="badge">{{ user.role }}</span>
+    </div>
+
+    <div class="filter-bar">
+        <label><strong>Expiry Filter:</strong></label>
+        <select id="expiryFilter" onchange="applyFilter()">
+            <option value="all">All Licenses</option>
+            <option value="expired">Expired</option>
+            <option value="30">Expiring in 30 Days</option>
+            <option value="60">Expiring in 60 Days</option>
+            <option value="90">Expiring in 90 Days</option>
+        </select>
+    </div>
+
+    <div class="section-title">Select Department</div>
+    <div class="dept-grid">
+        {% for dept in departments %}
+        <div class="dept-card" onclick="selectDepartment('{{ dept }}')">
+            {{ dept }}
+        </div>
+        {% endfor %}
+    </div>
+
+   
+    <div class="table-box" id="tableBox">
+        <h3 id="tableTitle">License Details</h3>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Sl No</th>
+                    <th>License Type</th>
+                    <th>Responsible Person</th>
+                    <th>Expiry Date</th>
+                    <th>Days Left</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+
+    {% if user.role == "admin" %}
+    <div class="action-bar">
+        <a class="btn" href="{{ url_for('send_alerts') }}">Send Email Alerts</a>
+    </div>
+    {% endif %}
+
+</div>
+
+<script>
+    const alerts = {{ alerts | tojson }};
+    let selectedDepartment = null;
+
+    function selectDepartment(dept) {
+        selectedDepartment = dept;
+        applyFilter();
+    }
+
+    function applyFilter() {
+        if (!selectedDepartment) return;
+
+        const filter = document.getElementById("expiryFilter").value;
+        const tbody = document.getElementById("tableBody");
+        const tableBox = document.getElementById("tableBox");
+        const title = document.getElementById("tableTitle");
+
+        tbody.innerHTML = "";
+        let count = 1;
+
+        let filtered = alerts.filter(
+            a => a.department.toLowerCase().includes(selectedDepartment.toLowerCase())
+        );
+
+        filtered = filtered.filter(a => {
+            if (filter === "expired") return a.days_left < 0;
+            if (filter === "30") return a.days_left >= 0 && a.days_left <= 30;
+            if (filter === "60") return a.days_left >= 0 && a.days_left <= 60;
+            if (filter === "90") return a.days_left >= 0 && a.days_left <= 90;
+            return true;
+        });
+
+        title.innerText = `${selectedDepartment} – License Details`;
+
+        if (filtered.length === 0) {
+            tbody.innerHTML = `
+                <tr><td colspan="5" style="text-align:center;">
+                    No matching license data
+                </td></tr>`;
+        } else {
+            filtered.forEach(a => {
+                let rowClass = a.days_left < 0 ? "expired" :
+                               a.days_left <= 30 ? "warning" : "safe";
+
+                tbody.innerHTML += `
+                    <tr class="${rowClass}">
+                        <td>${count++}</td>
+                        <td>${a.license_name}</td>
+                        <td>${a.person}</td>
+                        <td>${a.expiry_date}</td>
+                        <td>${a.days_left}</td>
+                    </tr>`;
+            });
+        }
+
+        tableBox.style.display = "block";
+        tableBox.scrollIntoView({ behavior: "smooth" });
+    }
+</script>
+
+</body>
+</html>
